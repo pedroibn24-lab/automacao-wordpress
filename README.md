@@ -1,4 +1,4 @@
-# 🤖 Automação de Conteúdo para WordPress com Gemini API
+# Automação de Conteúdo para WordPress com Gemini API
 
 Este é um script automatizado em Node.js desenvolvido para gerar artigos profundos, profissionais e otimizados para SEO focados em educação corporativa, enviando-os diretamente para o painel do WordPress como rascunhos.
 
@@ -6,7 +6,7 @@ O motor de inteligência artificial utilizado é o **Gemini 1.5 Flash** (via Goo
 
 ---
 
-## 🚀 Funcionalidades
+## Funcionalidades
 
 * **Geração Inteligente:** Criação de artigos estruturados diretamente com tags HTML (`<h2>`, `<h3>`, `<p>`, `<ul>`, `<li>`).
 * **Integração Direta:** Conexão automática com a API REST do WordPress utilizando autenticação segura.
@@ -14,7 +14,7 @@ O motor de inteligência artificial utilizado é o **Gemini 1.5 Flash** (via Goo
 
 ---
 
-## 🛠️ Tecnologias Utilizadas
+## Tecnologias Utilizadas
 
 | Tecnologia | Descrição |
 | :--- | :--- |
@@ -25,6 +25,6 @@ O motor de inteligência artificial utilizado é o **Gemini 1.5 Flash** (via Goo
 
 ---
 
-## 📦 Pré-requisitos e Instalação
+## Pré-requisitos e Instalação
 
 Precisa ter o **Node.js** instalado na máquina.
