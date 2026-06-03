@@ -5,98 +5,118 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const WP_USER = process.env.WP_USER;
 const WP_APP_PASSWORD = process.env.WP_APP_PASSWORD;
 
-// URLs da sua instalação de desenvolvimento na HostGator
 const WP_POSTS_URL = 'https://ibnegocios.com.br/cms_Dev/?rest_route=/wp/v2/posts';
-const WP_MEDIA_URL = 'https://ibnegocios.com.br/cms_Dev/?rest_route=/wp/v2/media';
 
-// Função mágica que gera a imagem na IA e envia para a biblioteca do WordPress
-async function gerarEEnviarImagem(promptDaImagem, credenciaisBase64) {
-    try {
-        console.log(`🎨 Gerando imagem na IA com o conceito: "${promptDaImagem}"...`);
-        
-        // Customiza o tamanho ideal de capa para blog (1200x630)
-        const urlPollinations = `https://image.pollinations.ai/prompt/${encodeURIComponent(promptDaImagem)}?width=1200&height=630&nologo=true&seed=${Math.floor(Math.random() * 1000)}`;
+const SLEEP = ms => new Promise(res => setTimeout(res, ms));
 
-        // Baixa a imagem gerada como dados brutos (buffer)
-        const respostaImagem = await axios.get(urlPollinations, { responseType: 'arraybuffer' });
-        const bufferImagem = Buffer.from(respostaImagem.data, 'binary');
+const MODELOS_FALLBACK = [
+    "moonshotai/kimi-k2.6:free",
+    "nvidia/nemotron-3-super-120b-a12b:free",
+    "google/gemma-4-31b-it:free",
+    "meta-llama/llama-3.3-70b-instruct:free",
+];
 
-        console.log('📤 Enviando imagem de capa para a Biblioteca de Mídia do WordPress...');
+async function chamarOpenRouter(mensagemSistema) {
+    const MAX_TENTATIVAS_POR_MODELO = 2;
 
-        // Faz o upload para a biblioteca do WordPress
-        const respostaMedia = await axios.post(WP_MEDIA_URL, bufferImagem, {
-            headers: {
-                'Authorization': `Basic ${credenciaisBase64}`,
-                'Content-Type': 'image/jpeg',
-                'Content-Disposition': 'attachment; filename="capa_automatica.jpg"'
+    for (const modelo of MODELOS_FALLBACK) {
+        for (let tentativa = 1; tentativa <= MAX_TENTATIVAS_POR_MODELO; tentativa++) {
+            try {
+                console.log(`🔁 Usando modelo: ${modelo} (tentativa ${tentativa}/${MAX_TENTATIVAS_POR_MODELO})`);
+                const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
+                    model: modelo,
+                    messages: [
+                        { role: "system", content: mensagemSistema },
+                        { role: "user", content: "Escolha um tema estratégico de negócios ou liderança relevante para o momento atual do mercado brasileiro e escreva o artigo completo seguindo todas as instruções." }
+                    ]
+                }, {
+                    headers: { 'Authorization': `Bearer ${OPENROUTER_API_KEY}`, 'Content-Type': 'application/json' }
+                });
+
+                // OpenRouter às vezes retorna HTTP 200 com erro no corpo
+                if (response.data?.error) {
+                    const retryAfter = response.data.error?.metadata?.retry_after_seconds;
+                    if (retryAfter != null && tentativa < MAX_TENTATIVAS_POR_MODELO) {
+                        console.warn(`⏳ Rate limit (corpo). Aguardando ${Math.ceil(retryAfter)}s...`);
+                        await SLEEP(Math.ceil(retryAfter) * 1000);
+                        continue;
+                    }
+                    console.warn(`⚠️ Modelo ${modelo} indisponível. Tentando próximo...`);
+                    break; // passa para o próximo modelo
+                }
+
+                return response;
+
+            } catch (error) {
+                const retryAfter = error.response?.data?.error?.metadata?.retry_after_seconds;
+                const isRateLimit = error.response?.status === 429 || retryAfter != null;
+
+                if (isRateLimit && tentativa < MAX_TENTATIVAS_POR_MODELO) {
+                    const espera = Math.ceil(retryAfter ?? 20) * 1000;
+                    console.warn(`⏳ Rate limit. Aguardando ${espera / 1000}s...`);
+                    await SLEEP(espera);
+                    continue;
+                }
+
+                console.warn(`⚠️ Modelo ${modelo} falhou (${error.response?.status ?? error.message}). Tentando próximo...`);
+                break; // passa para o próximo modelo
             }
-        });
-
-        // Retorna o ID da imagem que o WordPress acabou de criar
-        return respostaMedia.data.id;
-
-    } catch (error) {
-        console.error('⚠️ Não foi possível gerar ou subir a imagem, mas o post continuará sem capa.', error.message);
-        return null;
+        }
     }
+
+    throw new Error('Todos os modelos falharam. Tente novamente mais tarde.');
 }
 
 async function rodarGeradorAutonomo() {
     try {
-        console.log('🤖 IA Ativada! Escolhendo tema e planejando imagem corporativa...');
+        console.log('🤖 IA Ativada! Gerando artigo corporativo...');
 
-        const contextoEmpresa = `
-        Você é o redator principal do Instituto Brasileiro de Negócios (ibnegocios.com.br). 
-        Nossa empresa tem o propósito de transformar empresas através da educação corporativa.
-        `;
+        const mensagemSistema = `
+Você é o redator-chefe sênior do Instituto Brasileiro de Negócios (ibnegocios.com.br), referência nacional em educação corporativa.
+Seu público é composto por executivos, gestores e empreendedores brasileiros que buscam conteúdo denso, aplicável e baseado em evidências.
 
-        const promptSistema = `
-        ${contextoEmpresa}
+PADRÃO DE QUALIDADE OBRIGATÓRIO:
+- Escreva como um especialista que viveu o tema, não como alguém que apenas pesquisou sobre ele.
+- Use exemplos reais de empresas brasileiras e globais, com contexto e análise — não apenas citações soltas.
+- Inclua dados, pesquisas ou referências reconhecidas quando relevante (McKinsey, Harvard Business Review, IBGE, etc.).
+- Cada seção deve entregar um insight concreto e acionável, não apenas conceitos genéricos.
+- O tom é direto, inteligente e respeitoso — sem excesso de entusiasmo, sem jargão vazio.
+- O artigo deve ter no mínimo 1200 palavras.
 
-        Escolha um tema estratégico de negócios/liderança.
-        
-        FORMATO OBRIGATÓRIO DA RESPOSTA (Siga estritamente as 3 partes separadas por linhas):
-        Linha 1: Apenas o título do post (sem tags, sem aspas).
-        Linha 2: Apenas um prompt de imagem em INGLÊS realista e corporativo que represente esse post (ex: "A modern corporate office with executives talking, high quality, professional photography").
-        Linha 3 em diante: O artigo profundo estruturado diretamente com tags HTML (<h2>, <h3>, <p>, <ul>).
-        `;
+ESTRUTURA DO ARTIGO:
+1. Introdução impactante que apresenta o problema ou oportunidade com dados ou situação real (2-3 parágrafos)
+2. Corpo com 4 a 6 seções H2, cada uma com subtópicos H3 quando necessário
+3. Ao menos uma lista <ul> prática por seção principal
+4. Conclusão com síntese e chamada à reflexão ou ação
 
-        const responseOpenRouter = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
-            model: "openrouter/free", 
-            messages: [{ role: "user", content: promptSistema }]
-        }, {
-            headers: { 'Authorization': `Bearer ${OPENROUTER_API_KEY}`, 'Content-Type': 'application/json' }
-        });
+FORMATO OBRIGATÓRIO DA RESPOSTA:
+Linha 1: Apenas o título do post (sem tags HTML, sem aspas, sem markdown, sem # — texto puro).
+Linha 2 em diante: O artigo completo usando tags HTML (<h2>, <h3>, <p>, <ul>, <li>, <strong>). Nenhum texto fora das tags.
+`;
+
+        const responseOpenRouter = await chamarOpenRouter(mensagemSistema);
 
         const textoBrutoIA = responseOpenRouter.data.choices[0].message.content;
         const linhas = textoBrutoIA.split('\n').map(l => l.trim()).filter(l => l !== '');
 
-        // Pega as duas primeiras linhas válidas
-        const tituloArtigo = linhas[0];
-        const promptImagem = linhas[1];
-        const conteudoHtml = linhas.slice(2).join('\n');
+        const tituloArtigo = linhas[0]
+            .replace(/<[^>]+>/g, '')
+            .replace(/^#+\s*/, '')
+            .replace(/\*+/g, '')
+            .trim();
+        const conteudoHtml = linhas.slice(1).join('\n');
 
         console.log(`\n📝 Título: "${tituloArtigo}"`);
-        
+
         const credenciaisBase64 = Buffer.from(`${WP_USER}:${WP_APP_PASSWORD}`).toString('base64');
 
-        // Dispara a geração da imagem antes de criar o post
-        const idDaImagem = await gerarEEnviarImagem(promptImagem, credenciaisBase64);
+        console.log('🚀 Publicando o rascunho...');
 
-        console.log('🚀 Publicando o rascunho finalizado...');
-
-        // Dados do post (incluindo a imagem como "featured_media")
-        const dadosDoPost = {
+        const responseWp = await axios.post(WP_POSTS_URL, {
             title: tituloArtigo,
             content: conteudoHtml,
             status: 'draft'
-        };
-
-        if (idDaImagem) {
-            dadosDoPost.featured_media = idDaImagem; // Amarra a foto ao post!
-        }
-
-        const responseWp = await axios.post(WP_POSTS_URL, dadosDoPost, {
+        }, {
             headers: { 'Authorization': `Basic ${credenciaisBase64}`, 'Content-Type': 'application/json' }
         });
 
