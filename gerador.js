@@ -81,7 +81,7 @@ async function rodarGeradorAutonomo() {
             - Inclua dados, pesquisas ou referências reconhecidas quando relevante (McKinsey, Harvard Business Review, IBGE, etc.).
             - Cada seção deve entregar um insight concreto e acionável, não apenas conceitos genéricos.
             - O tom é direto, inteligente e respeitoso — sem excesso de entusiasmo, sem jargão vazio.
-            - O artigo deve ter no mínimo 1200 palavras.
+            - O artigo deve ter no mínimo 600 palavras, mas a qualidade e profundidade são mais importantes que a extensão.
 
             ESTRUTURA DO ARTIGO:
             1. Introdução impactante que apresenta o problema ou oportunidade com dados ou situação real (2-3 parágrafos)
