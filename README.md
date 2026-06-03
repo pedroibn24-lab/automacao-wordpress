@@ -1,8 +1,8 @@
-# Automação de Conteúdo para WordPress com Gemini API
+# Automação de Conteúdo para WordPress com OpenRouter
 
 Este é um script automatizado em Node.js desenvolvido para gerar artigos profundos, profissionais e otimizados para SEO focados em educação corporativa, enviando-os diretamente para o painel do WordPress como rascunhos.
 
-O motor de inteligência artificial utilizado é o **Gemini 1.5 Flash** (via Google AI Studio), garantindo rapidez e alta qualidade na estruturação do conteúdo em HTML puro.
+O motor de inteligência artificial utilizado é o **OpenRouter**, com sistema de fallback entre múltiplos modelos gratuitos (Kimi K2, Nvidia Nemotron, Google Gemma, Llama 3.3), garantindo resiliência e continuidade mesmo quando um modelo está indisponível.
 
 ---
 
@@ -19,8 +19,8 @@ O motor de inteligência artificial utilizado é o **Gemini 1.5 Flash** (via Goo
 | Tecnologia | Descrição |
 | :--- | :--- |
 | **Node.js** | Ambiente de execução do JavaScript no backend. |
-| **Gemini API** | Modelo `gemini-1.5-flash` para geração de texto. |
-| **Axios** | Cliente HTTP para realizar as requisições às APIs da Google e do WordPress. |
+| **OpenRouter API** | Gateway de IA com fallback automático entre modelos: Kimi K2, Nvidia Nemotron, Google Gemma e Llama 3.3. |
+| **Axios** | Cliente HTTP para requisições à API do OpenRouter e à API REST do WordPress. |
 | **Dotenv** | Gestão de variáveis de ambiente e proteção de chaves de acesso. |
 
 ---
