@@ -1,14 +1,24 @@
+// ============================================================
+// DEPENDÊNCIAS E CONFIGURAÇÃO INICIAL
+// ============================================================
 require('dotenv').config();
 const axios = require('axios');
 
+// Credenciais e configurações lidas do arquivo .env
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const WP_USER = process.env.WP_USER;
 const WP_APP_PASSWORD = process.env.WP_APP_PASSWORD;
 
+// Endpoint da API REST do WordPress para criação de posts
 const WP_POSTS_URL = 'https://ibnegocios.com.br/cms_Dev/?rest_route=/wp/v2/posts';
 
+// Utilitário para pausar a execução sem bloquear o event loop
 const SLEEP = ms => new Promise(res => setTimeout(res, ms));
 
+// ============================================================
+// LISTA DE MODELOS — FALLBACK EM CASCATA
+// ============================================================
+// Se um modelo falhar ou atingir rate limit, o próximo da lista é tentado
 const MODELOS_FALLBACK = [
     "moonshotai/kimi-k2.6:free",
     "nvidia/nemotron-3-super-120b-a12b:free",
@@ -16,6 +26,12 @@ const MODELOS_FALLBACK = [
     "meta-llama/llama-3.3-70b-instruct:free",
 ];
 
+// ============================================================
+// CHAMADA À API DO OPENROUTER COM RETRY E FALLBACK
+// ============================================================
+// Tenta cada modelo até MAX_TENTATIVAS_POR_MODELO vezes.
+// Respeita o retry_after retornado pela API em caso de rate limit.
+// Lança erro somente se todos os modelos falharem.
 async function chamarOpenRouter(mensagemSistema) {
     const MAX_TENTATIVAS_POR_MODELO = 2;
 
@@ -33,7 +49,7 @@ async function chamarOpenRouter(mensagemSistema) {
                     headers: { 'Authorization': `Bearer ${OPENROUTER_API_KEY}`, 'Content-Type': 'application/json' }
                 });
 
-                // OpenRouter às vezes retorna HTTP 200 com erro no corpo
+                // Rate limit retornado no corpo da resposta (HTTP 200 com erro interno)
                 if (response.data?.error) {
                     const retryAfter = response.data.error?.metadata?.retry_after_seconds;
                     if (retryAfter != null && tentativa < MAX_TENTATIVAS_POR_MODELO) {
@@ -42,12 +58,13 @@ async function chamarOpenRouter(mensagemSistema) {
                         continue;
                     }
                     console.warn(`⚠️ Modelo ${modelo} indisponível. Tentando próximo...`);
-                    break; // passa para o próximo modelo
+                    break; // Passa para o próximo modelo
                 }
 
                 return response;
 
             } catch (error) {
+                // Rate limit retornado via HTTP 429 ou campo retry_after no erro
                 const retryAfter = error.response?.data?.error?.metadata?.retry_after_seconds;
                 const isRateLimit = error.response?.status === 429 || retryAfter != null;
 
@@ -59,7 +76,7 @@ async function chamarOpenRouter(mensagemSistema) {
                 }
 
                 console.warn(`⚠️ Modelo ${modelo} falhou (${error.response?.status ?? error.message}). Tentando próximo...`);
-                break; // passa para o próximo modelo
+                break; // Passa para o próximo modelo
             }
         }
     }
@@ -67,10 +84,17 @@ async function chamarOpenRouter(mensagemSistema) {
     throw new Error('Todos os modelos falharam. Tente novamente mais tarde.');
 }
 
+// ============================================================
+// FUNÇÃO PRINCIPAL — GERAÇÃO E PUBLICAÇÃO DO ARTIGO
+// ============================================================
 async function rodarGeradorAutonomo() {
     try {
         console.log('🤖 IA Ativada! Gerando artigo corporativo...');
 
+        // --------------------------------------------------------
+        // PROMPT DO SISTEMA — instrui o modelo sobre tom, estrutura
+        // e formato obrigatório da resposta
+        // --------------------------------------------------------
         const mensagemSistema = `
             Você é o redator-chefe sênior do Instituto Brasileiro de Negócios (ibnegocios.com.br), referência nacional em educação corporativa.
             Seu público é composto por executivos, gestores e empreendedores brasileiros que buscam conteúdo denso, aplicável e baseado em evidências.
@@ -95,9 +119,13 @@ async function rodarGeradorAutonomo() {
 
         const responseOpenRouter = await chamarOpenRouter(mensagemSistema);
 
+        // --------------------------------------------------------
+        // PARSING DA RESPOSTA — separa título do corpo HTML
+        // --------------------------------------------------------
         const textoBrutoIA = responseOpenRouter.data.choices[0].message.content;
         const linhas = textoBrutoIA.split('\n').map(l => l.trim()).filter(l => l !== '');
 
+        // Remove tags HTML, markdown e asteriscos que o modelo possa ter incluído no título
         const tituloArtigo = linhas[0]
             .replace(/<[^>]+>/g, '')
             .replace(/^#+\s*/, '')
@@ -107,6 +135,10 @@ async function rodarGeradorAutonomo() {
 
         console.log(`\n📝 Título: "${tituloArtigo}"`);
 
+        // --------------------------------------------------------
+        // PUBLICAÇÃO NO WORDPRESS VIA REST API (rascunho)
+        // --------------------------------------------------------
+        // Autenticação via Application Password codificada em Base64
         const credenciaisBase64 = Buffer.from(`${WP_USER}:${WP_APP_PASSWORD}`).toString('base64');
 
         console.log('🚀 Publicando o rascunho...');
@@ -129,4 +161,7 @@ async function rodarGeradorAutonomo() {
     }
 }
 
+// ============================================================
+// PONTO DE ENTRADA
+// ============================================================
 rodarGeradorAutonomo();
